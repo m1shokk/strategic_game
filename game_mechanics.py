@@ -121,28 +121,37 @@ class GameState:
         if not self._are_neighbors(unit.cell, target_cell):
             return False
         
+        # Проверка на другие юниты (везде)
+        if target_cell.unit:
+            return False
+        
         # Движение внутри страны
         if target_cell in country.cells:
-            if target_cell.unit or target_cell == country.capital:
+            # Нельзя перемещаться на столицу и постройки
+            if (target_cell == country.capital or
+                any(city.x == target_cell.center[0] and city.y == target_cell.center[1] for city in country.cities) or
+                any(fortress.x == target_cell.center[0] and fortress.y == target_cell.center[1] for fortress in country.fortresses)):
                 return False
-            
-            # Проверка на наличие построек
-            for city in country.cities:
-                if city.x == target_cell.center[0] and city.y == target_cell.center[1]:
-                    return False
-            for fortress in country.fortresses:
-                if fortress.x == target_cell.center[0] and fortress.y == target_cell.center[1]:
-                    return False
         
-        # Обработка леса
+        # Обработка леса (вырубка)
         for tree in trees[:]:
             if tree.x == target_cell.center[0] and tree.y == target_cell.center[1]:
                 trees.remove(tree)
-                if target_cell in country.cells:  # Добавляем деньги только если лес в нашей стране
+                if target_cell in country.cells:  # Деньги только за вырубку в своей стране
                     country.money += 2
                 break
         
-        # Перемещение
+        # Захват нейтральной/вражеской клетки
+        if target_cell not in country.cells:
+            # Если у клетки был предыдущий владелец, удаляем из его территории
+            if hasattr(target_cell, 'country') and target_cell.country:
+                target_cell.country.cells.remove(target_cell)
+            
+            # Устанавливаем нового владельца
+            target_cell.country = country
+            country.cells.append(target_cell)
+        
+        # Перемещение юнита
         unit.cell.unit = None
         unit.x, unit.y = target_cell.center
         unit.cell = target_cell
