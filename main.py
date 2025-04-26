@@ -1,37 +1,34 @@
 import pygame
-from map_gen import generate_hex_cells, point_in_hexagon, HexCell, BG_COLOR, CELL_COLOR, HOVER_COLOR, BORDER_COLOR
+from map_gen import generate_hex_cells, point_in_hexagon, BG_COLOR
 from tree_gen import generate_trees
 from game_mechanics import GameState
 from country import Country
 from eco import Economy
 from ui_builder import UIBuilder
 from objects import Unit, City, Fortress
-
+import math
 
 # Инициализация Pygame
 pygame.init()
 screen = pygame.display.set_mode((1920, 1080))
-pygame.display.set_caption("Hex Grid with Trees")
+pygame.display.set_caption("Hex Strategy Game")
 clock = pygame.time.Clock()
 
-# Генерация карты
+# Инициализация игровых объектов
 cells = generate_hex_cells()
-
-# Создание страны игрока
 player_country = Country(cells)
-
-# Генерация деревьев
 trees = generate_trees(cells, 20, 50, player_country.capital)
-
-# Экономика
 economy = Economy(player_country.capital, player_country.cells, trees)
-economy.calculate_income()  # Первоначальный расчет дохода
-
-# Инициализация состояния игры
+economy.calculate_income()
 game_state = GameState()
-
 ui_builder = UIBuilder(economy)
-building_mode = None  # Режим строительства: None, "unit", "city" или "fortress"
+
+# Переменные состояния
+building_mode = None
+dragging_unit = None
+building_drag = None
+selected_unit = None
+highlighted_cells = []  # Для подсветки доступных клеток
 
 # Главный игровой цикл
 running = True
@@ -41,90 +38,172 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:  # Левая кнопка мыши
-                # Сначала проверяем кнопку хода
+                # Выход из режима строительства при клике вне UI
+                if building_drag and not ui_builder.panel_rect.collidepoint(mouse_pos):
+                    building_drag = None
+                    continue
+                
+                # Проверка кнопки хода
                 if game_state.handle_click(mouse_pos, cells, trees, player_country.capital):
+                    for unit in player_country.units:
+                        unit.has_moved = False
                     economy.end_turn()
                     building_mode = None
                     ui_builder.visible = False
-                else:
-                    # Проверяем клик по UI строительства
+                    selected_unit = None
+                    highlighted_cells = []
+                
+                # Проверка UI строительства
+                elif ui_builder.visible and ui_builder.panel_rect.collidepoint(mouse_pos):
                     selected_option = ui_builder.handle_click(mouse_pos)
                     if selected_option:
-                        building_mode = selected_option
-                        player_country.selected = True  # Подсвечиваем страну при выборе постройки
-                    else:
-                        # Проверяем клик по территории страны
-                        clicked_on_country = False
-                        for cell in player_country.cells:
-                            if point_in_hexagon(mouse_pos, cell.points):
-                                clicked_on_country = True
+                        building_drag = selected_option
+                        selected_unit = None
+                        highlighted_cells = []
+                
+                # Проверка клика по юниту
+                else:
+                    unit_clicked = False
+                    for unit in player_country.units:
+                        if math.dist((unit.x, unit.y), mouse_pos) < 20 and not unit.has_moved:
+                            selected_unit = unit
+                            unit_clicked = True
+                            # Подсвечиваем доступные клетки
+                            highlighted_cells = []
+                            for cell in cells:
+                                # Проверяем, что клетка соседняя и не содержит других юнитов
+                                if not game_state._are_neighbors(unit.cell, cell) or cell.unit:
+                                    continue
+                                
+                                # Проверяем специальные случаи для клеток страны игрока
+                                if cell in player_country.cells:
+                                    # Нельзя перемещаться на столицу
+                                    if cell == player_country.capital:
+                                        continue
+                                    
+                                    # Проверяем наличие городов или крепостей
+                                    has_city = any(city.x == cell.center[0] and city.y == cell.center[1] 
+                                                for city in player_country.cities)
+                                    has_fortress = any(fortress.x == cell.center[0] and fortress.y == cell.center[1] 
+                                                    for fortress in player_country.fortresses)
+                                    
+                                    if has_city or has_fortress:
+                                        continue
+                                
+                                # Если все проверки пройдены, добавляем клетку в подсвеченные
+                                highlighted_cells.append(cell)  
+                            break
+                    
+                    if not unit_clicked and selected_unit:
+                        # Пытаемся переместить юнита на выбранную клетку
+                        for cell in cells:
+                            if point_in_hexagon(mouse_pos, cell.points) and cell in highlighted_cells:
+                                if game_state.handle_unit_movement(selected_unit, cell, player_country, trees):
+                                    selected_unit = None
+                                    highlighted_cells = []
                                 break
-                        
+                        else:
+                            # Клик вне доступных клеток - снимаем выделение
+                            selected_unit = None
+                            highlighted_cells = []
+                    
+                    elif not unit_clicked:
+                        # Проверка клика по территории страны
+                        clicked_on_country = any(
+                            point_in_hexagon(mouse_pos, cell.points)
+                            for cell in player_country.cells
+                        )
                         if clicked_on_country:
-                            # Если кликнули по стране и не в режиме строительства - показываем UI
-                            if not building_mode:
+                            if building_drag:
+                                building_drag = None
+                            else:
                                 player_country.selected = True
                                 ui_builder.visible = True
-                            else:
-                                # Режим строительства - пытаемся построить
-                                for cell in player_country.cells:
-                                    if point_in_hexagon(mouse_pos, cell.points):
-                                        if player_country.is_cell_free(cell, trees):  # Добавим trees как параметр
-                                            if building_mode == "unit" and economy.balance >= 8:
-                                                player_country.units.append(Unit(cell.center[0], cell.center[1]))
-                                                economy.balance -= 8
-                                                building_mode = None
-                                            elif building_mode == "city" and economy.balance >= 12:
-                                                player_country.cities.append(City(cell.center[0], cell.center[1]))
-                                                economy.balance -= 12
-                                                building_mode = None
-                                            elif building_mode == "fortress" and economy.balance >= 15:
-                                                player_country.fortresses.append(Fortress(cell.center[0], cell.center[1]))
-                                                economy.balance -= 15
-                                                building_mode = None
-                                            elif event.type == pygame.KEYDOWN:
-                                                if event.key == pygame.K_ESCAPE:
-                                                    building_mode = None
-                                        break
+                                selected_unit = None
+                                highlighted_cells = []
                         else:
                             # Клик вне страны - снимаем выделение
                             player_country.selected = False
                             ui_builder.visible = False
-                            building_mode = None
+                            selected_unit = None
+                            highlighted_cells = []
+        
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1 and building_drag:
+                # Находим клетку, на которую отпустили
+                for cell in cells:
+                    if point_in_hexagon(mouse_pos, cell.points):
+                        # Строительство объекта
+                        if (cell in player_country.cells and 
+                            player_country.is_cell_free(cell, trees)):
+                            
+                            if building_drag == "unit" and economy.balance >= 8:
+                                unit = Unit(cell.center[0], cell.center[1])
+                                unit.cell = cell
+                                cell.unit = unit
+                                player_country.units.append(unit)
+                                economy.balance -= 8
+                            
+                            elif building_drag == "city" and economy.balance >= 12:
+                                player_country.cities.append(City(cell.center[0], cell.center[1]))
+                                economy.balance -= 12
+                            
+                            elif building_drag == "fortress" and economy.balance >= 15:
+                                player_country.fortresses.append(Fortress(cell.center[0], cell.center[1]))
+                                economy.balance -= 15
+                        
+                        break
+                
+                building_drag = None
+        
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                # Полный сброс всех режимов
+                building_mode = None
+                dragging_unit = None
+                building_drag = None
+                selected_unit = None
+                ui_builder.visible = False
+                player_country.selected = False
+                highlighted_cells = []
 
-    # Отображение клеток
+    # Отрисовка
     screen.fill(BG_COLOR)
-
-    # Отображение клеток (кроме клеток страны)
+    
+    # Клетки (кроме страны игрока)
     for cell in cells:
         if cell not in player_country.cells:
             is_hovered = point_in_hexagon(mouse_pos, cell.points)
             cell.draw(screen, is_hovered)
-
-    # Отображение страны игрока
+    
+    # Подсветка доступных клеток для перемещения
+    for cell in highlighted_cells:
+        pygame.draw.polygon(screen, (200, 200, 100), cell.points, 3)
+    
+    # Страна игрока и объекты
     player_country.draw(screen)
-
-    # Отображение деревьев
+    
+    # Деревья
     for tree in trees:
         tree.draw(screen)
-
-    # Отображение UI игры
+    
+    # UI
     game_state.draw(screen)
-
-    # Отображение экономики
     economy.draw(screen)
-
-    # Отображение UI строительства
     ui_builder.draw(screen)
-
-    # Отрисовка курсора в режиме строительства
-    if building_mode:
-        pygame.draw.circle(screen, (100, 255, 100), mouse_pos, 15, 2)
-        mode_text = ui_builder.font.render(f"Place {building_mode} (Esc - cancel)", True, (100, 255, 100))
-        screen.blit(mode_text, (mouse_pos[0] + 20, mouse_pos[1] - 10))
-
+    
+    # Отрисовка перетаскиваемого объекта строительства
+    if building_drag:
+        if building_drag == "unit":
+            img = ui_builder.unit_img
+        elif building_drag == "city":
+            img = ui_builder.city_img
+        else:
+            img = ui_builder.fortress_img
+        screen.blit(img, (mouse_pos[0] - 20, mouse_pos[1] - 20))
 
     pygame.display.flip()
     clock.tick(60)

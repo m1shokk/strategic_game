@@ -112,3 +112,49 @@ class GameState:
                             inside = not inside
             p1x, p1y = p2x, p2y
         return inside
+    
+    def handle_unit_movement(self, unit, target_cell, country, trees):
+        if unit.has_moved:
+            return False
+        
+        # Проверка соседства клеток
+        if not self._are_neighbors(unit.cell, target_cell):
+            return False
+        
+        # Движение внутри страны
+        if target_cell in country.cells:
+            if target_cell.unit or target_cell == country.capital:
+                return False
+            
+            # Проверка на наличие построек
+            for city in country.cities:
+                if city.x == target_cell.center[0] and city.y == target_cell.center[1]:
+                    return False
+            for fortress in country.fortresses:
+                if fortress.x == target_cell.center[0] and fortress.y == target_cell.center[1]:
+                    return False
+        
+        # Обработка леса
+        for tree in trees[:]:
+            if tree.x == target_cell.center[0] and tree.y == target_cell.center[1]:
+                trees.remove(tree)
+                if target_cell in country.cells:  # Добавляем деньги только если лес в нашей стране
+                    country.money += 2
+                break
+        
+        # Перемещение
+        unit.cell.unit = None
+        unit.x, unit.y = target_cell.center
+        unit.cell = target_cell
+        target_cell.unit = unit
+        unit.has_moved = True
+        return True
+        
+        # В класс GameState добавим метод (перед handle_unit_movement)
+    @staticmethod
+    def _are_neighbors(cell1, cell2):
+        """Проверяет, являются ли две клетки соседями"""
+        q_diff = abs(cell1.q - cell2.q)
+        r_diff = abs(cell1.r - cell2.r)
+        return (q_diff == 1 and r_diff == 0) or (q_diff == 0 and r_diff == 1) or (q_diff == 1 and r_diff == 1)
+

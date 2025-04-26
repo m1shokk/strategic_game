@@ -31,6 +31,7 @@ class HexCell:
         self.id = cell_id
         self.center = self.hex_to_pixel(q, r)
         self.points = self.calculate_corners(self.center)
+        self.unit = None  # Юнит на клетке (None, если пусто)
 
     def hex_to_pixel(self, q, r):
         x = WIDTH // 2 + HORIZ_SPACING * q

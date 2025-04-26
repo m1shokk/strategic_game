@@ -6,6 +6,8 @@ class Unit:
         self.y = y
         self.image = pygame.image.load('./images/unit.png').convert_alpha()
         self.image = pygame.transform.scale(self.image, (40, 40))
+        self.has_moved = False  # Флаг, указывающий, двигался ли юнит в этот ход
+        self.cell = None  # Ссылка на клетку, на которой стоит юнит (добавим при создании)
 
 class City:
     def __init__(self, x, y):

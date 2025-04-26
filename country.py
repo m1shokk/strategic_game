@@ -18,6 +18,7 @@ class Country:
         self.cells = self.initialize_country(cells)
         self.capital = self.cells[0]  # Первая клетка - столица
         self.capital.country = self  # Связываем клетку со страной
+        self.money = 10  # Добавляем начальный баланс
         
         # Загружаем иконку столицы
         self.capital_icon = self._load_capital_icon()
@@ -26,6 +27,7 @@ class Country:
         self.units = []        # Список юнитов страны
         self.cities = []       # Список городов страны
         self.fortresses = []   # Список крепостей страны
+
 
     def _load_capital_icon(self):
         """Загружает и масштабирует иконку столицы"""
@@ -109,9 +111,24 @@ class Country:
         for cell in self.cells:
             pygame.draw.polygon(surface, self.color, cell.points)
             pygame.draw.polygon(surface, (0, 0, 0), cell.points, 2)
-            
-        # Рисуем объекты страны
-        self._draw_objects(surface)
+        
+        # Рисуем объекты страны (кроме перетаскиваемого юнита)
+        for city in self.cities:
+            surface.blit(city.image, (city.x - 25, city.y - 25))
+        for fortress in self.fortresses:
+            surface.blit(fortress.image, (fortress.x - 25, fortress.y - 25))
+        for unit in self.units:
+            # Не рисуем юнит, если он сейчас перетаскивается
+            if not hasattr(self, 'dragging_unit') or unit != self.dragging_unit:
+                surface.blit(unit.image, (unit.x - 20, unit.y - 20))
+                if hasattr(self, 'selected_unit') and unit == self.selected_unit:
+                    pygame.draw.circle(surface, (255, 255, 0), 
+                          (self.selected_unit.x, self.selected_unit.y), 25, 2)
+        
+        # Рисуем столицу
+        capital_pos = (self.capital.center[0] - 30, self.capital.center[1] - 30)
+        surface.blit(self.capital_icon, capital_pos)
+
         
         # Рисуем столицу
         capital_pos = (self.capital.center[0] - 30, self.capital.center[1] - 30)
