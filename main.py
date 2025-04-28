@@ -47,6 +47,11 @@ selected_units = []  # Теперь список юнитов
 highlighted_cells = []  
 highlight_color = (200, 200, 100, 150)  # Желтый с прозрачностью
 
+# Отладочные переменные
+debug_font = pygame.font.Font(None, 24)
+debug_mode = False
+debug_info = ""
+
 def can_build_on_neutral(cell, country):
     """Проверяет можно ли построить на нейтральной соседней клетке"""
     if hasattr(cell, 'country') and cell.country:
@@ -94,6 +99,7 @@ def get_common_moves(units, cells, country):
 # Главный игровой цикл
 running = True
 while running:
+    
     mouse_pos = pygame.mouse.get_pos()
     current_player_index = game_state.current_player
     player_country = countries[current_player_index]
@@ -109,6 +115,7 @@ while running:
     
     # Обновляем UI для текущего игрока
     ui_builder.economy = player_country.economy
+
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -160,7 +167,21 @@ while running:
                         for cell in cells:
                             if point_in_hexagon(mouse_pos, cell.points) and cell in highlighted_cells:
                                 if hasattr(cell, 'country') and cell.country and cell.country != player_country:
-                                    game_state.handle_attack(selected_units, cell, player_country, trees)  # Добавили trees как параметр
+                                    # Логирование перед атакой
+                                    print(f"\n--- Перед атакой ---")
+                                    print(f"Атакующая страна: {player_country.color}, клетки: {[c.id for c in player_country.cells]}")
+                                    print(f"Защищающаяся страна: {cell.country.color}, клетки: {[c.id for c in cell.country.cells]}")
+                                    print(f"Целевая клетка: {cell.id}, владелец: {cell.country.color if cell.country else 'None'}")
+                                    
+                                    # Выполняем атаку
+                                    game_state.handle_attack(selected_units, cell, player_country, trees)
+                                    
+                                    # Логирование после атаки
+                                    print(f"\n--- После атаки ---")
+                                    print(f"Атакующая страна: {player_country.color}, клетки: {[c.id for c in player_country.cells]}")
+                                    print(f"Защищающаяся страна: {cell.country.color if cell.country else 'None'}, клетки: {[c.id for c in cell.country.cells] if cell.country else []}")
+                                    print(f"Целевая клетка: {cell.id}, владелец: {cell.country.color if cell.country else 'None'}")
+                                    print(f"Occupied cells: {Country.occupied_cells}")
                                 else:
                                     # Обычное перемещение
                                     if game_state.handle_unit_movement(selected_units[0], cell, player_country, trees):
@@ -249,6 +270,11 @@ while running:
                 for country in countries:
                     country.selected = False
                 highlighted_cells = []
+            
+            # Включение/выключение отладочного режима по F3
+            elif event.key == pygame.K_F3:
+                debug_mode = not debug_mode
+                print(f"Отладочный режим {'включен' if debug_mode else 'выключен'}")
 
     # Обновляем подсвеченные клетки
     highlighted_cells = game_state.get_common_moves(selected_units, cells, player_country) if selected_units else []
@@ -299,6 +325,33 @@ while running:
         else:
             img = ui_builder.fortress_img
         screen.blit(img, (mouse_pos[0] - 20, mouse_pos[1] - 20))
+
+    # Отладочная информация
+    if debug_mode:
+        debug_text = [
+            f"Отладочный режим (F3)",
+            f"Текущий игрок: {current_player_index + 1}",
+            f"Клеток у игрока: {len(player_country.cells)}",
+            f"Юнитов у игрока: {len(player_country.units)}",
+            f"Occupied cells: {len(Country.occupied_cells)}",
+            f"Курсор: {mouse_pos}",
+            debug_info
+        ]
+        
+        for i, text in enumerate(debug_text):
+            text_surface = debug_font.render(text, True, (255, 255, 255))
+            screen.blit(text_surface, (10, 10 + i * 25))
+        
+        # Отладочный вывод при наведении на клетку
+        for cell in cells:
+            if point_in_hexagon(mouse_pos, cell.points):
+                owner = cell.country.color if hasattr(cell, 'country') and cell.country else "None"
+                debug_info = f"Клетка {cell.id}, владелец: {owner}"
+                if cell.unit:
+                    debug_info += f", юнит: {cell.unit}"
+                if cell in player_country.cells:
+                    debug_info += f", столица: {cell == player_country.capital}"
+                break
 
     pygame.display.flip()
     clock.tick(60)

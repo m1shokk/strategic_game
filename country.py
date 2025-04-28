@@ -85,6 +85,9 @@ class Country:
         occupied = {start_cell.id}
         country_cells = [start_cell]
         
+        # Явно назначаем владельца для стартовой клетки
+        start_cell.country = self
+        
         # Количество дополнительных клеток (2-4)
         num_additional_cells = random.randint(2, 4)
         
@@ -101,6 +104,8 @@ class Country:
                 new_cell = random.choice(neighbors)
                 country_cells.append(new_cell)
                 occupied.add(new_cell.id)
+                # Явно назначаем владельца для каждой новой клетки
+                new_cell.country = self
             else:
                 break  # Если нет свободных соседей
         
