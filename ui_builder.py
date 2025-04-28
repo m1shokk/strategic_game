@@ -58,3 +58,13 @@ class UIBuilder:
         elif self.fortress_rect.collidepoint(pos) and self.economy.balance >= 15:
             return "fortress"
         return None
+    
+    def can_build_on_cell(self, cell, country, trees):
+        """Проверяет, можно ли построить на клетке"""
+        # Для своей территории стандартная проверка
+        if cell in country.cells:
+            return country.is_cell_free(cell, trees)
+        
+        # Для нейтральных клеток
+        return (not hasattr(cell, 'country') or cell.country is None) \
+            and country.is_neighbor_cell(cell)

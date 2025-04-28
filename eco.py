@@ -12,21 +12,23 @@ class Economy:
     def calculate_income(self):
         """Считает доход игрока за ход."""
         self.income = 0
-    
-    # Базовый доход от клеток
+        
         for cell in self.country_cells:
+            # Проверяем, что клетка всё ещё принадлежит стране
+            if not hasattr(cell, 'country') or cell.country != self.capital.country:
+                continue
+                
             has_tree = any(tree.x == cell.center[0] and tree.y == cell.center[1] for tree in self.trees)
             if cell == self.capital:
-                self.income += 2  # Столица
+                self.income += 2
             elif not has_tree:
-                self.income += 1  # Пустая провинция
+                self.income += 1
         
-        # Доход/расход от объектов (если есть страна)
         if hasattr(self.capital, 'country'):
             country = self.capital.country
-            self.income += len(country.cities) * 4    # +4 за город
-            self.income -= len(country.units) * 2     # -2 за юнита
-            self.income -= len(country.fortresses) *1 # -1 за крепость
+            self.income += len(country.cities) * 4
+            self.income -= len(country.units) * 2
+            self.income -= len(country.fortresses) * 1
 
     def end_turn(self):
         """Вызывается в конце хода: добавляет доход."""

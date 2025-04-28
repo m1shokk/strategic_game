@@ -118,13 +118,17 @@ class Country:
 
     def draw(self, surface):
         """Отрисовывает страну и все её объекты"""
-        if hasattr(self, 'player_index'):
-            # Рисуем номер игрока в столице
-            font = pygame.font.Font(None, 24)
-            text = font.render(str(self.player_index + 1), True, (0, 0, 0))
-            text_rect = text.get_rect(center=(self.capital.center[0], self.capital.center[1] - 10))
-            surface.blit(text, text_rect)
+        if self.is_defeated():
+            return
             
+        if hasattr(self, 'player_index'):
+            # Рисуем номер игрока в столице (если она есть)
+            if self.capital:  # Добавлена проверка
+                font = pygame.font.Font(None, 24)
+                text = font.render(str(self.player_index + 1), True, (0, 0, 0))
+                text_rect = text.get_rect(center=(self.capital.center[0], self.capital.center[1] - 10))
+                surface.blit(text, text_rect)
+                
         if self.selected:
             self._draw_selection_overlay(surface)
             
@@ -139,15 +143,12 @@ class Country:
         for fortress in self.fortresses:
             surface.blit(fortress.image, (fortress.x - 25, fortress.y - 25))
         for unit in self.units:
-            if not hasattr(self, 'dragging_unit') or unit != self.dragging_unit:
-                surface.blit(unit.image, (unit.x - 20, unit.y - 20))
-                if hasattr(self, 'selected_unit') and unit == self.selected_unit:
-                    pygame.draw.circle(surface, (255, 255, 0), 
-                          (self.selected_unit.x, self.selected_unit.y), 25, 2)
+            surface.blit(unit.image, (unit.x - 20, unit.y - 20))
         
-        # Рисуем столицу
-        capital_pos = (self.capital.center[0] - 30, self.capital.center[1] - 30)
-        surface.blit(self.capital_icon, capital_pos)
+        # Рисуем столицу (если она есть)
+        if self.capital:
+            capital_pos = (self.capital.center[0] - 30, self.capital.center[1] - 30)
+            surface.blit(self.capital_icon, capital_pos)
 
     def _draw_selection_overlay(self, surface):
         """Отрисовывает выделение страны"""
@@ -166,3 +167,76 @@ class Country:
             surface.blit(fortress.image, (fortress.x - 25, fortress.y - 25))
         for unit in self.units:
             surface.blit(unit.image, (unit.x - 20, unit.y - 20))
+
+    def remove_unit_at_cell(self, cell):
+        """Удаляет юнит на указанной клетке"""
+        for unit in self.units[:]:
+            if unit.x == cell.center[0] and unit.y == cell.center[1]:
+                self.units.remove(unit)
+                if cell.unit == unit:
+                    cell.unit = None
+                break
+
+    def remove_city_at_cell(self, cell):
+        """Удаляет город на указанной клетке"""
+        for city in self.cities[:]:
+            if city.x == cell.center[0] and city.y == cell.center[1]:
+                self.cities.remove(city)
+                break
+
+    def remove_fortress_at_cell(self, cell):
+        """Удаляет крепость на указанной клетке"""
+        for fortress in self.fortresses[:]:
+            if fortress.x == cell.center[0] and fortress.y == cell.center[1]:
+                self.fortresses.remove(fortress)
+                break
+    def clear_cell_ownership(self, cell):
+        """Полностью очищает клетку от всех объектов страны и возвращает её в нейтральное состояние"""
+        self.remove_unit_at_cell(cell)
+        self.remove_city_at_cell(cell)
+        self.remove_fortress_at_cell(cell)
+        if cell in self.cells:
+            self.cells.remove(cell)
+        cell.country = None  # Убираем связь с страной
+
+    def is_neighbor_cell(self, cell):
+        """Проверяет, является ли клетка соседней для территории страны"""
+        return any(self._are_neighbors(c, cell) for c in self.cells)
+    
+    def remove_cell(self, cell):
+        """Удаляет клетку из территории страны"""
+        if cell in self.cells:
+            self.cells.remove(cell)
+            # Если это была столица - выбираем новую
+            if cell == self.capital:
+                self.capital = self.cells[0] if self.cells else None
+                
+    def is_defeated(self):
+        """Проверяет, побеждена ли страна (нет клеток)"""
+        return len(self.cells) == 0
+    
+    def completely_remove_cell(self, cell):
+        """Полностью открепляет клетку от страны"""
+        # Удаляем все объекты
+        self.remove_unit_at_cell(cell)
+        self.remove_city_at_cell(cell)
+        self.remove_fortress_at_cell(cell)
+        
+        # Удаляем из списка клеток страны
+        if cell in self.cells:
+            self.cells.remove(cell)
+        
+        # Удаляем из статического списка занятых клеток
+        if cell.id in Country.occupied_cells:
+            Country.occupied_cells.remove(cell.id)
+        
+        # Очищаем ссылку на страну в клетке
+        if hasattr(cell, 'country') and cell.country == self:
+            cell.country = None
+        
+        # Если это была столица - сбрасываем
+        if cell == self.capital:
+            self.capital = None
+            # Если есть другие клетки - назначаем новую столицу
+            if self.cells:
+                self.capital = self.cells[0]

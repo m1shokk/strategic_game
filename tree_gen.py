@@ -14,23 +14,32 @@ class Tree:
     def draw(self, surface):
         surface.blit(self.image, (self.x - self.size//2, self.y - self.size//2))
 
-def generate_trees(cells, num_trees, tree_size=50, capital_cell=None):
+def generate_trees(cells, num_trees, tree_size=50, countries=None):
     trees = []
-    occupied_cells = set()
+    if countries is None:
+        countries = []
     
-    # Создаем список запрещенных клеток (столица и её соседи)
+    # Собираем все занятые клетки (столицы и их соседи)
     forbidden_cells = set()
-    if capital_cell:
-        forbidden_cells.add(capital_cell)
-        # Добавляем соседей столицы
-        for cell in cells:
-            q_diff = abs(capital_cell.q - cell.q)
-            r_diff = abs(capital_cell.r - cell.r)
-            if (q_diff == 1 and r_diff == 0) or (q_diff == 0 and r_diff == 1) or (q_diff == 1 and r_diff == 1):
-                forbidden_cells.add(cell)
+    for country in countries:
+        if hasattr(country, 'capital') and country.capital:
+            forbidden_cells.add(country.capital)
+            # Добавляем соседей столицы
+            for cell in cells:
+                if GameState._are_neighbors(country.capital, cell):
+                    forbidden_cells.add(cell)
     
-    # Создаем список всех возможных клеток, исключая запрещенные
+    # Доступные клетки
     available_cells = [cell for cell in cells if cell not in forbidden_cells]
+    
+    for _ in range(num_trees):
+        if not available_cells:
+            break
+        cell = random.choice(available_cells)
+        trees.append(Tree(cell.center[0], cell.center[1], tree_size))
+        available_cells.remove(cell)
+    
+    return trees
     
     # Функция для проверки соседних клеток
     def has_tree_neighbor(cell):
