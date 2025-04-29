@@ -65,8 +65,7 @@ class Country:
         if cell == self.capital:
             return False
             
-        if any(tree.x == cell.center[0] and tree.y == cell.center[1] for tree in trees):
-            return False
+        # Убрали проверку на деревья, чтобы разрешить строительство на лесных клетках
             
         objects = self.units + self.cities + self.fortresses
         return not any(
@@ -245,3 +244,22 @@ class Country:
             # Если есть другие клетки - назначаем новую столицу
             if self.cells:
                 self.capital = self.cells[0]
+
+        def prepare_cell_for_capital(self, cell, trees):
+            """Полностью подготавливает клетку для переноса столицы"""
+            # Удаляем все объекты страны
+            self.remove_unit_at_cell(cell)
+            self.remove_city_at_cell(cell)
+            self.remove_fortress_at_cell(cell)
+            
+            # Удаляем деревья
+            for tree in trees[:]:
+                if tree.x == cell.center[0] and tree.y == cell.center[1]:
+                    trees.remove(tree)
+                    break
+            
+            # Очищаем ссылки
+            if hasattr(cell, 'unit'):
+                cell.unit = None
+
+        

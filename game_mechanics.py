@@ -1,7 +1,7 @@
 import pygame
 import random
 import math
-from tree_gen import Tree
+from tree import Tree
 from country import Country  # Добавьте в начало файла
 
 
@@ -59,60 +59,46 @@ class GameState:
         return False
 
     def propagate_trees(self, cells, trees, country):
-        """Распространение деревьев с учетом всех объектов на карте"""
-        # Создаем множество занятых клеток (включая все объекты)
-        occupied_cells = set()
+        # Собираем центры всех занятых клеток (деревья + постройки)
+        occupied_centers = set()
         
-        # Добавляем клетки с деревьями
-        for cell in cells:
-            if any(tree.x == cell.center[0] and tree.y == cell.center[1] for tree in trees):
-                occupied_cells.add(cell.id)
+        # Добавляем центры всех деревьев
+        for tree in trees:
+            occupied_centers.add((tree.x, tree.y))
         
-        # Добавляем клетки с любыми объектами
+        # Добавляем центры всех объектов (юниты, города, крепости, столицы)
         for cell in cells:
             if hasattr(cell, 'country') and cell.country:
-                # Проверяем юниты, города, крепости и столицу
-                country = cell.country
-                if any(unit.x == cell.center[0] and unit.y == cell.center[1] for unit in country.units):
-                    occupied_cells.add(cell.id)
-                if any(city.x == cell.center[0] and city.y == cell.center[1] for city in country.cities):
-                    occupied_cells.add(cell.id)
-                if any(fortress.x == cell.center[0] and fortress.y == cell.center[1] for fortress in country.fortresses):
-                    occupied_cells.add(cell.id)
-                if cell == country.capital:
-                    occupied_cells.add(cell.id)
+                # Проверяем, есть ли на клетке юнит, город, крепость или столица
+                has_unit = any(unit.x == cell.center[0] and unit.y == cell.center[1] for unit in cell.country.units)
+                has_city = any(city.x == cell.center[0] and city.y == cell.center[1] for city in cell.country.cities)
+                has_fortress = any(fortress.x == cell.center[0] and fortress.y == cell.center[1] for fortress in cell.country.fortresses)
+                is_capital = cell == cell.country.capital
+                
+                if has_unit or has_city or has_fortress or is_capital:
+                    occupied_centers.add((cell.center[0], cell.center[1]))
         
-        # Создаем список возможных новых позиций для деревьев
-        new_positions = []
-        
-        # Для каждого дерева проверяем строго соседние клетки
+        new_trees = []
         for tree in trees[:]:
             tree_cell = self.find_cell_by_position(cells, tree.x, tree.y)
             if not tree_cell:
                 continue
                 
             for cell in cells:
-                # Проверяем строгое соседство
+                # Проверяем соседство
                 if not self._are_neighbors(tree_cell, cell):
                     continue
                     
-                # Проверяем что клетка свободна
-                if cell.id in occupied_cells:
+                # Проверяем, что клетка свободна (нет деревьев и построек)
+                if (cell.center[0], cell.center[1]) in occupied_centers:
                     continue
                     
-                # Дополнительная проверка объектов
-                if any(
-                    obj.x == cell.center[0] and obj.y == cell.center[1]
-                    for obj in trees
-                ):
-                    continue
-                    
-                new_positions.append(cell)
+                # 3% шанс на рост нового дерева
+                if random.random() < 0.03:
+                    new_trees.append(Tree(cell.center[0], cell.center[1], tree.size))
+                    occupied_centers.add((cell.center[0], cell.center[1]))  # Помечаем как занятую
         
-        # Для каждой возможной новой позиции проверяем шанс 3%
-        for position in new_positions:
-            if random.random() < 0.03:
-                trees.append(Tree(position.center[0], position.center[1], 50))
+        trees.extend(new_trees)
 
     def find_cell_by_position(self, cells, x, y):
         """Находит клетку по координатам точки"""
@@ -144,58 +130,47 @@ class GameState:
         if unit.has_moved:
             return False
         
-        # Проверка соседства клеток (строго 1 клетка разницы)
+        # Проверка соседства клеток
         q_diff = abs(unit.cell.q - target_cell.q)
         r_diff = abs(unit.cell.r - target_cell.r)
         if not ((q_diff == 1 and r_diff == 0) or (q_diff == 0 and r_diff == 1) or (q_diff == 1 and r_diff == 1)):
             return False
         
-        # Обработка леса (вырубка)
+        # Вырубка дерева (теперь работает на любой клетке)
         for tree in trees[:]:
             if tree.x == target_cell.center[0] and tree.y == target_cell.center[1]:
                 trees.remove(tree)
-                if target_cell in country.cells:  # Деньги только за вырубку в своей стране
+                # Бонус только если это своя территория
+                if target_cell in country.cells:
                     country.money += 2
                     if hasattr(country, 'economy'):
                         country.economy.balance += 2
                 break
         
-        # Если клетка принадлежит врагу - обрабатываем как атаку
+        # Остальная логика перемещения остается без изменений
         if hasattr(target_cell, 'country') and target_cell.country and target_cell.country != country:
-            return False  # Атака обрабатывается отдельно через handle_attack
+            return False  # Атака обрабатывается отдельно
         
-        # Захват нейтральной клетки
         if target_cell not in country.cells:
-            # Если у клетки был предыдущий владелец
             if hasattr(target_cell, 'country') and target_cell.country:
                 old_owner = target_cell.country
-                # Удаляем все объекты старого владельца
                 old_owner.remove_unit_at_cell(target_cell)
                 old_owner.remove_city_at_cell(target_cell)
                 old_owner.remove_fortress_at_cell(target_cell)
-                
-                # Удаляем клетку из территории старого владельца
                 old_owner.cells.remove(target_cell)
-                # Немедленный пересчет дохода старого владельца
                 if hasattr(old_owner, 'economy'):
                     old_owner.economy.calculate_income()
             
-            # Устанавливаем нового владельца
             target_cell.country = country
             country.cells.append(target_cell)
-            # Немедленный пересчет дохода нового владельца
             if hasattr(country, 'economy'):
                 country.economy.calculate_income()
-        
-        # Движение внутри страны
         elif target_cell in country.cells:
-            # Нельзя перемещаться на столицу и постройки
             if (target_cell == country.capital or
                 any(city.x == target_cell.center[0] and city.y == target_cell.center[1] for city in country.cities) or
                 any(fortress.x == target_cell.center[0] and fortress.y == target_cell.center[1] for fortress in country.fortresses)):
                 return False
         
-        # Перемещение юнита
         unit.cell.unit = None
         unit.x, unit.y = target_cell.center
         unit.cell = target_cell
@@ -238,47 +213,62 @@ class GameState:
         return True
 
     def handle_attack(self, attacking_units, target_cell, attacking_country, trees):
-        if not target_cell.country:  # Если клетка нейтральная
-            return self.handle_unit_movement(attacking_units[0], target_cell, attacking_country, trees)
+        # Удаляем дерево на целевой клетке (если есть)
+        for tree in trees[:]:
+            if tree.x == target_cell.center[0] and tree.y == target_cell.center[1]:
+                trees.remove(tree)
+                break
         
         defending_country = target_cell.country
 
-        # Помечаем ВСЕХ атакующих юнитов как совершивших ход
         for unit in attacking_units:
             unit.has_moved = True
         
-        # 1. Полностью очищаем клетку у защищающейся страны
         defending_country.completely_remove_cell(target_cell)
         
-        # 2. Удаляем из статического списка занятых клеток
         if target_cell.id in Country.occupied_cells:
             Country.occupied_cells.remove(target_cell.id)
         
-        # 3. Переносим первого атакующего юнита
         if attacking_units:
             first_unit = attacking_units[0]
-            first_unit.cell.unit = None  # Очищаем старую клетку
+            first_unit.cell.unit = None
             first_unit.cell = target_cell
             first_unit.x, first_unit.y = target_cell.center
             first_unit.has_moved = True
             target_cell.unit = first_unit
         
-        # 4. Устанавливаем нового владельца
         target_cell.country = attacking_country
         attacking_country.cells.append(target_cell)
-        Country.occupied_cells.add(target_cell.id)  # Добавляем в статический список
+        Country.occupied_cells.add(target_cell.id)
         
-        # 5. Если это была столица - выбираем новую (если есть клетки)
         if target_cell == defending_country.capital:
-            defending_country.capital = defending_country.cells[0] if defending_country.cells else None
+            # Находим новую клетку для столицы
+            if defending_country.cells:
+                new_capital = None
+                # Ищем первую подходящую клетку
+                for cell in defending_country.cells:
+                    # Полностью очищаем клетку перед проверкой
+                    self.clear_cell_contents(cell, defending_country, trees)
+                    
+                    # Проверяем, что клетка свободна после очистки
+                    has_units = any(u.x == cell.center[0] and u.y == cell.center[1] for u in defending_country.units)
+                    has_cities = any(c.x == cell.center[0] and c.y == cell.center[1] for c in defending_country.cities)
+                    has_fortresses = any(f.x == cell.center[0] and f.y == cell.center[1] for f in defending_country.fortresses)
+                    
+                    if not has_units and not has_cities and not has_fortresses:
+                        new_capital = cell
+                        break
+                
+                # Если не нашли полностью свободную, берем первую и очищаем
+                if not new_capital and defending_country.cells:
+                    new_capital = defending_country.cells[0]
+                    self.clear_cell_contents(new_capital, defending_country, trees)
+                
+                defending_country.capital = new_capital
         
-        # 6. Пересчёт доходов
         attacking_country.economy.calculate_income()
         defending_country.economy.calculate_income()
 
-        if not hasattr(target_cell, 'country') or not target_cell.country:
-            return self.handle_unit_movement(attacking_units[0], target_cell, attacking_country, trees)
-        
         return True
     
     def get_common_moves(self, units, cells, country):
@@ -340,6 +330,7 @@ class GameState:
         
         return common_cells
     
+
     def clear_cell_contents(self, cell, country, trees):
         """Полностью очищает клетку от всех объектов перед размещением нового"""
         # Удаляем дерево
@@ -353,3 +344,7 @@ class GameState:
             cell.country.remove_unit_at_cell(cell)
             cell.country.remove_city_at_cell(cell)
             cell.country.remove_fortress_at_cell(cell)
+        
+        # Очищаем ссылки в самой клетке
+        if hasattr(cell, 'unit'):
+            cell.unit = None
