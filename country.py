@@ -136,11 +136,6 @@ class Country:
         if self.selected:
             self._draw_selection_overlay(surface)
             
-        # Рисуем клетки страны
-        for cell in self.cells:
-            pygame.draw.polygon(surface, self.color, cell.points)
-            pygame.draw.polygon(surface, (0, 0, 0), cell.points, 2)
-        
         # Рисуем объекты страны
         for city in self.cities:
             surface.blit(city.image, (city.x - 25, city.y - 25))

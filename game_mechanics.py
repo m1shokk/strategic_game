@@ -213,11 +213,8 @@ class GameState:
         return True
 
     def handle_attack(self, attacking_units, target_cell, attacking_country, trees):
-        # Удаляем дерево на целевой клетке (если есть)
-        for tree in trees[:]:
-            if tree.x == target_cell.center[0] and tree.y == target_cell.center[1]:
-                trees.remove(tree)
-                break
+        # Удаляем всё с целевой клетки
+        self.clear_cell_contents(target_cell, target_cell.country, trees)
         
         defending_country = target_cell.country
 
@@ -241,36 +238,30 @@ class GameState:
         attacking_country.cells.append(target_cell)
         Country.occupied_cells.add(target_cell.id)
         
-        if target_cell == defending_country.capital:
-            # Находим новую клетку для столицы
-            if defending_country.cells:
-                new_capital = None
-                # Ищем первую подходящую клетку
-                for cell in defending_country.cells:
-                    # Полностью очищаем клетку перед проверкой
-                    self.clear_cell_contents(cell, defending_country, trees)
-                    
-                    # Проверяем, что клетка свободна после очистки
-                    has_units = any(u.x == cell.center[0] and u.y == cell.center[1] for u in defending_country.units)
-                    has_cities = any(c.x == cell.center[0] and c.y == cell.center[1] for c in defending_country.cities)
-                    has_fortresses = any(f.x == cell.center[0] and f.y == cell.center[1] for f in defending_country.fortresses)
-                    
-                    if not has_units and not has_cities and not has_fortresses:
-                        new_capital = cell
-                        break
+        # Улучшенная обработка переноса столицы
+        if target_cell == defending_country.capital and defending_country.cells:
+            new_capital = None
+            
+            # Сначала ищем полностью пустую клетку
+            for cell in defending_country.cells:
+                # Полная очистка клетки
+                self._force_clear_cell(cell, defending_country, trees)
                 
-                # Если не нашли полностью свободную, берем первую и очищаем
-                if not new_capital and defending_country.cells:
-                    new_capital = defending_country.cells[0]
-                    self.clear_cell_contents(new_capital, defending_country, trees)
-                
-                defending_country.capital = new_capital
+                if not self._cell_has_objects(cell, defending_country, trees):
+                    new_capital = cell
+                    break
+            
+            # Если не нашли пустую, берем первую и форсированно очищаем
+            if not new_capital and defending_country.cells:
+                new_capital = defending_country.cells[0]
+                self._force_clear_cell(new_capital, defending_country, trees)
+            
+            defending_country.capital = new_capital
         
         attacking_country.economy.calculate_income()
         defending_country.economy.calculate_income()
-
         return True
-    
+
     def get_common_moves(self, units, cells, country):
         """Возвращает общие доступные клетки для группы юнитов, включая вражеские юниты для атаки"""
         if not units:
@@ -348,3 +339,33 @@ class GameState:
         # Очищаем ссылки в самой клетке
         if hasattr(cell, 'unit'):
             cell.unit = None
+
+    def _force_clear_cell(self, cell, country, trees):
+        """Агрессивно очищает клетку от всех объектов"""
+        # Удаляем объекты страны
+        country.remove_unit_at_cell(cell)
+        country.remove_city_at_cell(cell)
+        country.remove_fortress_at_cell(cell)
+        
+        # Удаляем деревья
+        trees[:] = [t for t in trees if (t.x, t.y) != (cell.center[0], cell.center[1])]
+        
+        # Очищаем ссылки в клетке
+        if hasattr(cell, 'unit'):
+            cell.unit = None
+
+    def _cell_has_objects(self, cell, country, trees):
+        """Проверяет наличие объектов на клетке"""
+        # Проверяем юнитов страны
+        if any((u.x, u.y) == (cell.center[0], cell.center[1]) for u in country.units):
+            return True
+        # Проверяем города
+        if any((c.x, c.y) == (cell.center[0], cell.center[1]) for c in country.cities):
+            return True
+        # Проверяем крепости
+        if any((f.x, f.y) == (cell.center[0], cell.center[1]) for f in country.fortresses):
+            return True
+        # Проверяем деревья
+        if any((t.x, t.y) == (cell.center[0], cell.center[1]) for t in trees):
+            return True
+        return False

@@ -52,7 +52,6 @@ class HexCell:
     def draw(self, surface, is_hovered):
         color = HOVER_COLOR if is_hovered else CELL_COLOR
         pygame.draw.polygon(surface, color, self.points)
-        pygame.draw.polygon(surface, BORDER_COLOR, self.points, 2)
 
 # --- Генерация карты с ограничением по экрану ---
 def generate_hex_cells():

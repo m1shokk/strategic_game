@@ -35,6 +35,17 @@ class Economy:
         self.calculate_income()
         self.balance += self.income
 
+    def check_bankruptcy(self, country, trees):
+        """Проверяет банкротство: если баланс < 0, все юниты умирают, на их месте появляются деревья, баланс = 0."""
+        if self.balance < 0:
+            for unit in country.units[:]:
+                # Добавляем дерево на место юнита
+                trees.append(type(trees[0])(unit.x, unit.y, 50) if trees else Tree(unit.x, unit.y, 50))
+                if hasattr(unit, 'cell') and hasattr(unit.cell, 'unit'):
+                    unit.cell.unit = None
+                country.units.remove(unit)
+            self.balance = 0
+
     def draw(self, surface):
         """Показывает баланс и доход."""
         balance_text = f"Balance: ${self.balance}"

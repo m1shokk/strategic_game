@@ -7,6 +7,7 @@ from eco import Economy
 from ui_builder import UIBuilder
 from objects import Unit, City, Fortress
 import math
+from itertools import chain
 
 # Инициализация Pygame
 pygame.init()
@@ -70,6 +71,10 @@ debug_font = pygame.font.Font(None, 24)
 debug_mode = False
 debug_info = ""
 
+# --- Новые переменные для статистики ---
+show_stats = False
+stats_button_rect = pygame.Rect(1920 - 220, 20, 200, 50)
+
 def can_build_on_neutral(cell, country):
     """Проверяет можно ли построить на нейтральной соседней клетке"""
     if hasattr(cell, 'country') and cell.country:
@@ -103,7 +108,10 @@ while running:
             running = False
         
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:  # Левая кнопка мыши
+            if event.button == 1:
+                if stats_button_rect.collidepoint(mouse_pos):
+                    show_stats = not show_stats
+                    continue
                 if building_drag and not ui_builder.panel_rect.collidepoint(mouse_pos):
                     building_drag = None
                     continue
@@ -114,6 +122,7 @@ while running:
                         for unit in country.units:
                             unit.has_moved = False
                         country.economy.end_turn()
+                        country.economy.check_bankruptcy(country, trees)
                     
                     building_mode = None
                     ui_builder.visible = False
@@ -259,20 +268,60 @@ while running:
     # Отрисовка
     screen.fill(BG_COLOR)
     
+    # --- Визуализация клеток ---
+    # 1. Сначала рисуем все клетки (серый фон и подсветка выбора)
     for cell in cells:
         is_hovered = point_in_hexagon(mouse_pos, cell.points)
-        cell.draw(screen, is_hovered)
-    
-    for cell in highlighted_cells:
-        xs = [p[0] for p in cell.points]
-        ys = [p[1] for p in cell.points]
-        width = max(xs) - min(xs)
-        height = max(ys) - min(ys)
-        if width > 0 and height > 0:
-            overlay = pygame.Surface((width, height), pygame.SRCALPHA)
-            overlay.fill(highlight_color)
-            screen.blit(overlay, (min(xs), min(ys)))
-    
+        # Если выбран юнит(ы), затемняем недоступные клетки, но не клетки выбранной страны
+        cell_country = getattr(cell, 'country', None)
+        is_selected_country = cell_country.selected if cell_country else False
+        if selected_units and not is_selected_country:
+            if cell in highlighted_cells:
+                color = (100, 100, 100)
+            else:
+                color = (40, 40, 40)
+        else:
+            color = (160, 160, 160) if is_hovered else (100, 100, 100)
+        pygame.draw.polygon(screen, color, cell.points)
+
+    # 2. Затем рисуем заливку цветом страны (рандомный цвет из country.color)
+    for country in countries:
+        if not country.is_defeated():
+            for cell in country.cells:
+                pygame.draw.polygon(screen, country.color, cell.points)
+
+    # 2. Жёлтая обводка для доступных клеток
+    if selected_units:
+        for cell in highlighted_cells:
+            pygame.draw.polygon(screen, (255, 255, 0), cell.points, 4)
+
+    # --- Вспомогательная функция для поиска внешних рёбер ---
+    def get_outer_edges(cell_list):
+        edge_count = {}
+        for cell in cell_list:
+            pts = cell.points
+            for i in range(6):
+                edge = (pts[i], pts[(i+1)%6])
+                edge_rev = (pts[(i+1)%6], pts[i])
+                if edge_rev in edge_count:
+                    edge_count[edge_rev] += 1
+                else:
+                    edge_count[edge] = edge_count.get(edge, 0) + 1
+        # Оставляем только те рёбра, которые встречаются один раз (внешние)
+        return [edge for edge, count in edge_count.items() if count == 1]
+
+    # 3. Белая полупрозрачная обводка по внешнему контуру всей карты
+    map_edges = get_outer_edges(cells)
+    for edge in map_edges:
+        pygame.draw.line(screen, (255,255,255,180), edge[0], edge[1], 4)
+
+    # 4. Чёрная обводка по внешнему контуру каждой страны (поверх всего)
+    for country in countries:
+        if not country.is_defeated() and len(country.cells) > 1:
+            country_edges = get_outer_edges(country.cells)
+            for edge in country_edges:
+                pygame.draw.line(screen, (0,0,0), edge[0], edge[1], 5)
+
     for country in countries:
         if not country.is_defeated():
             country.draw(screen)
@@ -318,9 +367,52 @@ while running:
                 debug_info = f"Клетка {cell.id}, владелец: {owner}"
                 if cell.unit:
                     debug_info += f", юнит: {cell.unit}"
-                if cell in player_country.cells:
-                    debug_info += f", столица: {cell == player_country.capital}"
+                capitals = []
+                for country in countries:
+                    if cell == country.capital:
+                        capitals.append(str(country.player_index + 1))
+                if capitals:
+                    debug_info += f", столица стран: {', '.join(capitals)}"
                 break
+
+    # --- Рисуем кнопку статистики ---
+    pygame.draw.rect(screen, (60, 60, 120), stats_button_rect, border_radius=12)
+    pygame.draw.rect(screen, (200, 200, 255), stats_button_rect, 3, border_radius=12)
+    font_stats = pygame.font.Font(None, 36)
+    text_stats = font_stats.render('Статистика', True, (255, 255, 255))
+    text_rect_stats = text_stats.get_rect(center=stats_button_rect.center)
+    screen.blit(text_stats, text_rect_stats)
+
+    # --- Окно статистики ---
+    if show_stats:
+        # Полупрозрачный фон
+        overlay = pygame.Surface((700, 400), pygame.SRCALPHA)
+        overlay.fill((30, 30, 60, 230))
+        screen.blit(overlay, (610, 120))
+        # Заголовок
+        title_font = pygame.font.Font(None, 48)
+        title = title_font.render('Country Statistics', True, (255, 255, 255))
+        screen.blit(title, (960 - title.get_width() // 2, 140))
+        # Таблица
+        table_font = pygame.font.Font(None, 36)
+        header = table_font.render('Player   |   Income   |   Cells', True, (200, 220, 255))
+        screen.blit(header, (670, 200))
+        for i, country in enumerate(countries):
+            # Чистый доход: только доход с клеток и городов, без расходов
+            base_income = 0
+            for cell in country.cells:
+                if not hasattr(cell, 'country') or cell.country != country:
+                    continue
+                has_tree = any(tree.x == cell.center[0] and tree.y == cell.center[1] for tree in trees)
+                if cell == country.capital:
+                    base_income += 2
+                elif not has_tree:
+                    base_income += 1
+            base_income += len(country.cities) * 4
+            # Красивый цвет строки
+            row_color = (220, 220, 255) if i % 2 == 0 else (180, 180, 220)
+            row = table_font.render(f"{i+1:>5}   |   {base_income:>6}   |   {len(country.cells):>6}", True, row_color)
+            screen.blit(row, (690, 240 + i * 40))
 
     pygame.display.flip()
     clock.tick(60)
