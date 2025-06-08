@@ -215,17 +215,15 @@ class GameState:
     def handle_attack(self, attacking_units, target_cell, attacking_country, trees):
         # Удаляем всё с целевой клетки
         self.clear_cell_contents(target_cell, target_cell.country, trees)
-        
         defending_country = target_cell.country
-
+        capital_was_captured = False
+        if target_cell == defending_country.capital:
+            capital_was_captured = True
         for unit in attacking_units:
             unit.has_moved = True
-        
         defending_country.completely_remove_cell(target_cell)
-        
         if target_cell.id in Country.occupied_cells:
             Country.occupied_cells.remove(target_cell.id)
-        
         if attacking_units:
             first_unit = attacking_units[0]
             first_unit.cell.unit = None
@@ -233,34 +231,29 @@ class GameState:
             first_unit.x, first_unit.y = target_cell.center
             first_unit.has_moved = True
             target_cell.unit = first_unit
-        
         target_cell.country = attacking_country
         attacking_country.cells.append(target_cell)
         Country.occupied_cells.add(target_cell.id)
-        
         # Улучшенная обработка переноса столицы
-        if target_cell == defending_country.capital and defending_country.cells:
+        if capital_was_captured:
+            # Ищем полностью свободную клетку для новой столицы
             new_capital = None
-            
-            # Сначала ищем полностью пустую клетку
             for cell in defending_country.cells:
                 # Полная очистка клетки
                 self._force_clear_cell(cell, defending_country, trees)
-                
-                if not self._cell_has_objects(cell, defending_country, trees):
+                # Проверяем, что клетка полностью свободна (нет юнитов, городов, крепостей, деревьев)
+                has_tree = any(tree.x == cell.center[0] and tree.y == cell.center[1] for tree in trees)
+                has_unit = any(unit.x == cell.center[0] and unit.y == cell.center[1] for unit in defending_country.units)
+                has_city = any(city.x == cell.center[0] and city.y == cell.center[1] for city in defending_country.cities)
+                has_fortress = any(f.x == cell.center[0] and f.y == cell.center[1] for f in defending_country.fortresses)
+                if not (has_tree or has_unit or has_city or has_fortress):
                     new_capital = cell
                     break
-            
-            # Если не нашли пустую, берем первую и форсированно очищаем
-            if not new_capital and defending_country.cells:
-                new_capital = defending_country.cells[0]
-                self._force_clear_cell(new_capital, defending_country, trees)
-            
+            # Если не нашли свободную клетку — столица не назначается
             defending_country.capital = new_capital
-        
         attacking_country.economy.calculate_income()
         defending_country.economy.calculate_income()
-        return True
+        return capital_was_captured
 
     def get_common_moves(self, units, cells, country):
         """Возвращает общие доступные клетки для группы юнитов, включая вражеские юниты для атаки"""

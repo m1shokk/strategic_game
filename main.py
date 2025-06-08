@@ -8,6 +8,7 @@ from ui_builder import UIBuilder
 from objects import Unit, City, Fortress
 import math
 from itertools import chain
+import time
 
 # Инициализация Pygame
 pygame.init()
@@ -75,6 +76,35 @@ debug_info = ""
 show_stats = False
 stats_button_rect = pygame.Rect(1920 - 220, 20, 200, 50)
 
+# --- Система уведомлений ---
+class EventNotification:
+    def __init__(self, text_ru, text_fr, color=(255,255,255), duration=2.5):
+        self.text_ru = text_ru
+        self.text_fr = text_fr
+        self.color = color
+        self.start_time = time.time()
+        self.duration = duration
+        self.alpha = 255
+    def get_progress(self):
+        return (time.time() - self.start_time) / self.duration
+
+# Список активных уведомлений
+# Каждый элемент: EventNotification
+# Появляются по центру сверху, исчезают с затуханием
+event_notifications = []
+
+# --- Функция для добавления уведомления ---
+def add_notification(text_ru, text_fr, color=(255,255,255), duration=2.5):
+    event_notifications.append(EventNotification(text_ru, text_fr, color, duration))
+
+# --- Для отслеживания событий ---
+leader_country = None  # Для смены лидера по клеткам
+first_unit_done = set()  # Индексы стран, у которых уже был первый юнит
+first_city_done = set()  # Индексы стран, у которых уже был первый город
+captured_capitals = set()  # id столиц, которые уже были захвачены
+capitulated_countries = set()  # Индексы стран, которые уже капитулировали
+victory_notification = None  # Сохраняем победное уведомление
+
 def can_build_on_neutral(cell, country):
     """Проверяет можно ли построить на нейтральной соседней клетке"""
     if hasattr(cell, 'country') and cell.country:
@@ -92,13 +122,29 @@ while running:
     current_player_index = game_state.current_player
     player_country = countries[current_player_index]
     
-    # Пропускаем побеждённых игроков
+    # --- Капитуляция ---
     if player_country.is_defeated():
+        if player_country.player_index not in capitulated_countries:
+            add_notification(f"Страна {player_country.player_index+1} капитулировала!", f"Le pays {player_country.player_index+1} a capitulé !", (255,100,100))
+            capitulated_countries.add(player_country.player_index)
         game_state.players_ready[current_player_index] = True
         game_state.current_player = (game_state.current_player + 1) % game_state.num_players
         if all(country.is_defeated() for country in countries):
+            # --- Победа ---
+            alive = [c for c in countries if not c.is_defeated()]
+            if alive:
+                victory_notification = EventNotification(f"Страна {alive[0].player_index+1} победила!", f"Le pays {alive[0].player_index+1} a gagné !", (100,255,100), 99999)
+                event_notifications.append(victory_notification)
             running = False
         continue
+    # --- Проверка смены лидера по клеткам ---
+    max_cells = max(len(c.cells) for c in countries)
+    leaders = [c for c in countries if len(c.cells) == max_cells and not c.is_defeated()]
+    if leaders:
+        if leader_country is None or leader_country != leaders[0]:
+            if leader_country is not None:
+                add_notification(f"Новый лидер по клеткам: страна {leaders[0].player_index+1}!", f"Nouveau leader: pays {leaders[0].player_index+1} !", (200,255,200))
+            leader_country = leaders[0]
     
     # Обновляем UI для текущего игрока
     ui_builder.economy = player_country.economy
@@ -121,13 +167,23 @@ while running:
                     for country in countries:
                         for unit in country.units:
                             unit.has_moved = False
+                        prev_units = len(country.units)
+                        prev_balance = country.economy.balance
                         country.economy.end_turn()
                         country.economy.check_bankruptcy(country, trees)
-                    
+                        if prev_balance < 0 and country.economy.balance == 0 and prev_units > 0 and len(country.units) == 0:
+                            add_notification(f"Страна {country.player_index+1} обанкротилась!", f"Le pays {country.player_index+1} a fait faillite !", (255,180,100))
+                    # --- Проверка захвата столицы ---
+                    for country in countries:
+                        if country.capital and id(country.capital) not in captured_capitals:
+                            if hasattr(country.capital, 'country') and country.capital.country != country:
+                                add_notification(f"Столица страны {country.player_index+1} захвачена!", f"La capitale du pays {country.player_index+1} a été capturée !", (255,120,255))
+                                captured_capitals.add(id(country.capital))
                     building_mode = None
                     ui_builder.visible = False
                     selected_units = []
                     highlighted_cells = []
+                    continue
                 
                 elif ui_builder.visible and ui_builder.panel_rect.collidepoint(mouse_pos):
                     selected_option = ui_builder.handle_click(mouse_pos)
@@ -152,7 +208,10 @@ while running:
                         for cell in cells:
                             if point_in_hexagon(mouse_pos, cell.points) and cell in highlighted_cells:
                                 if hasattr(cell, 'country') and cell.country and cell.country != player_country:
-                                    game_state.handle_attack(selected_units, cell, player_country, trees)
+                                    # --- Атака ---
+                                    capital_captured = game_state.handle_attack(selected_units, cell, player_country, trees)
+                                    if capital_captured:
+                                        add_notification(f"Столица страны {cell.country.player_index+1} захвачена!", f"La capitale du pays {cell.country.player_index+1} a été capturée !", (255,120,255))
                                 else:
                                     if game_state.handle_unit_movement(selected_units[0], cell, player_country, trees):
                                         for unit in selected_units[1:]:
@@ -228,6 +287,11 @@ while running:
                                 cell.unit = unit
                                 player_country.units.append(unit)
                                 
+                                # --- Первый юнит ---
+                                if player_country.player_index not in first_unit_done:
+                                    add_notification(f"Первый юнит для страны {player_country.player_index+1}!", f"Première unité pour le pays {player_country.player_index+1} !", (200,255,200))
+                                    first_unit_done.add(player_country.player_index)
+                                
                                 if cell not in player_country.cells:
                                     cell.country = player_country
                                     player_country.cells.append(cell)
@@ -237,6 +301,10 @@ while running:
                             
                             elif building_drag == "city" and player_country.economy.balance >= 12:
                                 player_country.cities.append(City(cell.center[0], cell.center[1]))
+                                # --- Первый город ---
+                                if player_country.player_index not in first_city_done:
+                                    add_notification(f"Первый город для страны {player_country.player_index+1}!", f"Première ville pour le pays {player_country.player_index+1} !", (200,200,255))
+                                    first_city_done.add(player_country.player_index)
                                 player_country.economy.balance -= 12
                             
                             elif building_drag == "fortress" and player_country.economy.balance >= 15:
@@ -379,7 +447,7 @@ while running:
     pygame.draw.rect(screen, (60, 60, 120), stats_button_rect, border_radius=12)
     pygame.draw.rect(screen, (200, 200, 255), stats_button_rect, 3, border_radius=12)
     font_stats = pygame.font.Font(None, 36)
-    text_stats = font_stats.render('Статистика', True, (255, 255, 255))
+    text_stats = font_stats.render('Stats', True, (255, 255, 255))
     text_rect_stats = text_stats.get_rect(center=stats_button_rect.center)
     screen.blit(text_stats, text_rect_stats)
 
@@ -391,7 +459,7 @@ while running:
         screen.blit(overlay, (610, 120))
         # Заголовок
         title_font = pygame.font.Font(None, 48)
-        title = title_font.render('Country Statistics', True, (255, 255, 255))
+        title = title_font.render('Statistics', True, (255, 255, 255))
         screen.blit(title, (960 - title.get_width() // 2, 140))
         # Таблица
         table_font = pygame.font.Font(None, 36)
@@ -413,6 +481,38 @@ while running:
             row_color = (220, 220, 255) if i % 2 == 0 else (180, 180, 220)
             row = table_font.render(f"{i+1:>5}   |   {base_income:>6}   |   {len(country.cells):>6}", True, row_color)
             screen.blit(row, (690, 240 + i * 40))
+
+    # --- ОТРИСОВКА УВЕДОМЛЕНИЙ ---
+    notif_font = pygame.font.Font(None, 54)
+    notif_y = 40
+    for notif in event_notifications[:]:
+        if notif is victory_notification:
+            alpha = 255
+        else:
+            progress = notif.get_progress()
+            if progress > 1:
+                event_notifications.remove(notif)
+                continue
+            # Плавное появление/исчезновение
+            if progress < 0.15:
+                alpha = int(255 * (progress/0.15))
+            elif progress > 0.85:
+                alpha = int(255 * (1 - (progress-0.85)/0.15))
+            else:
+                alpha = 255
+        notif_surf = pygame.Surface((900, 70), pygame.SRCALPHA)
+        notif_surf.fill((30,30,40, int(alpha*0.85)))
+        text_ru = notif_font.render(notif.text_ru, True, notif.color)
+        text_fr = notif_font.render(notif.text_fr, True, notif.color)
+        text_ru.set_alpha(alpha)
+        text_fr.set_alpha(alpha)
+        notif_surf.blit(text_ru, (30, 5))
+        notif_surf.blit(text_fr, (30, 35))
+        shadow = pygame.Surface((900, 70), pygame.SRCALPHA)
+        shadow.fill((0,0,0, int(alpha*0.25)))
+        screen.blit(shadow, (510, notif_y+4))
+        screen.blit(notif_surf, (510, notif_y))
+        notif_y += 80
 
     pygame.display.flip()
     clock.tick(60)
