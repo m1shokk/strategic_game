@@ -9,6 +9,7 @@ from objects import Unit, City, Fortress
 import math
 from itertools import chain
 import time
+import json
 
 # Инициализация Pygame
 pygame.init()
@@ -20,12 +21,27 @@ clock = pygame.time.Clock()
 Country.used_colors = set()
 Country.occupied_cells = set()
 
-# Инициализация игровых объектов
-cells = generate_hex_cells()
+# --- Load settings ---
+def load_settings():
+    try:
+        with open("settings.json", "r") as f:
+            data = json.load(f)
+            num_players = data.get("num_players", 4)
+            map_size_idx = data.get("map_size_idx", 1)
+            return num_players, map_size_idx
+    except Exception:
+        return 4, 1
 
-# Создаем 4 страны
+map_size_options = [50, 100, 150]  # Small, Medium, Large
+num_players, map_size_idx = load_settings()
+num_cells = map_size_options[map_size_idx]
+
+# Инициализация игровых объектов
+cells = generate_hex_cells(num_cells)
+
+# Создаем страны по количеству игроков
 countries = []
-for i in range(4):
+for i in range(num_players):
     country = Country(cells)
     country.player_index = i  # Добавляем индекс игрока
     countries.append(country)
@@ -56,7 +72,7 @@ for country in countries:
     country.economy = Economy(country.capital, country.cells, trees)
     country.economy.calculate_income()
 
-game_state = GameState(num_players=4)
+game_state = GameState(num_players=num_players)
 ui_builder = UIBuilder(countries[0].economy)
 
 # Переменные состояния

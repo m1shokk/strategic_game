@@ -54,7 +54,7 @@ class HexCell:
         pygame.draw.polygon(surface, color, self.points)
 
 # --- Генерация карты с ограничением по экрану ---
-def generate_hex_cells():
+def generate_hex_cells(num_cells=None):
     occupied = set()
     cells = []
     cell_id = 0
@@ -70,7 +70,9 @@ def generate_hex_cells():
     max_q = WIDTH // HEX_WIDTH
     max_r = HEIGHT // HEX_HEIGHT
 
-    while len(cells) < NUM_CELLS:
+    target_cells = num_cells if num_cells is not None else NUM_CELLS
+
+    while len(cells) < target_cells:
         base_cell = random.choice(cells)
         random.shuffle(directions)
 
