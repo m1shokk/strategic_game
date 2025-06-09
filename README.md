@@ -6,7 +6,7 @@
 
 ### Описание
 
-**Hex Strategy Game** — это пошаговая стратегия на гексагональной карте для 4 игроков (можно играть по очереди за одним компьютером). Ваша задача — развивать свою страну, строить юнитов, города и крепости, захватывать территории и столицы других стран, а также управлять экономикой. Побеждает тот, кто останется последним!
+**Hex Strategy Game** — это пошаговая стратегия на гексагональной карте для 2-4 игроков (можно играть по очереди за одним компьютером). Ваша задача — развивать свою страну, строить юнитов, города и крепости, захватывать территории и столицы других стран, а также управлять экономикой. Побеждает тот, кто останется последним!
 
 ### Как играть (мини-туториал)
 
@@ -35,7 +35,7 @@
 
 ### Description
 
-**Hex Strategy Game** is a turn-based strategy game on a hexagonal map for 4 players (hotseat mode on one computer). Your goal is to develop your country, build units, cities, and fortresses, capture territories and capitals of other countries, and manage your economy. The last country standing wins!
+**Hex Strategy Game** is a turn-based strategy game on a hexagonal map for 2-4 players (hotseat mode on one computer). Your goal is to develop your country, build units, cities, and fortresses, capture territories and capitals of other countries, and manage your economy. The last country standing wins!
 
 ### How to Play (Mini-Tutorial)
 
@@ -64,7 +64,7 @@
 
 ### Description
 
-**Hex Strategy Game** est un jeu de stratégie au tour par tour sur une carte hexagonale pour 4 joueurs (mode hotseat sur un seul ordinateur). Votre objectif est de développer votre pays, construire des unités, des villes et des forteresses, conquérir des territoires et des capitales adverses, et gérer votre économie. Le dernier pays restant gagne !
+**Hex Strategy Game** est un jeu de stratégie au tour par tour sur une carte hexagonale pour 2-4 joueurs (mode hotseat sur un seul ordinateur). Votre objectif est de développer votre pays, construire des unités, des villes et des forteresses, conquérir des territoires et des capitales adverses, et gérer votre économie. Le dernier pays restant gagne !
 
 ### Comment jouer (Mini-tutoriel)
 
@@ -92,13 +92,21 @@
 ## 📸 Screenshots
 
 ### Statistics
-![Statistics](screenshots/stats_example.png)
+![image](https://github.com/user-attachments/assets/f8138b70-cc28-4669-89a6-bf87bad4eff6)
 
-### Map
-![Map](screenshots/map_example.png)
 
-### Battle
-![Battle](screenshots/battle_example.png)
+### Map (Large)
+![image](https://github.com/user-attachments/assets/f5e82027-12b5-4a14-9c61-8d8ede53b081)
+
+
+### Medium Size of Map with 4 players
+![image](https://github.com/user-attachments/assets/6c1259fe-97cb-47db-bc4a-7857e65b3f03)
+
+
+### Shop
+![image](https://github.com/user-attachments/assets/17ea6af1-df99-4bb4-8186-389b3c14543b)
+
+
 
 ---
 
