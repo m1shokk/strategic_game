@@ -95,12 +95,13 @@
 ![image](https://github.com/user-attachments/assets/f8138b70-cc28-4669-89a6-bf87bad4eff6)
 
 
-### Map
+### Map (Large)
 ![image](https://github.com/user-attachments/assets/f5e82027-12b5-4a14-9c61-8d8ede53b081)
 
 
-### Battle (1v1)
-![image](https://github.com/user-attachments/assets/ab0e748a-cfff-4430-9e7f-220f8f5d542a)
+### Medium Size of Map with 4 players
+![image](https://github.com/user-attachments/assets/6c1259fe-97cb-47db-bc4a-7857e65b3f03)
+
 
 ### Shop
 ![image](https://github.com/user-attachments/assets/17ea6af1-df99-4bb4-8186-389b3c14543b)
