@@ -130,6 +130,98 @@ def get_common_moves(units, cells, country):
     """Старая функция, больше не используется (оставлена для совместимости)"""
     return game_state.get_common_moves(units, cells, country) if game_state else []
 
+# Класс для окна подтверждения выхода
+class ExitConfirmation:
+    def __init__(self):
+        self.visible = False
+        self.width = 400
+        self.height = 250
+        self.x = (1920 - self.width) // 2
+        self.y = (1080 - self.height) // 2
+        self.rect = pygame.Rect(self.x, self.y, self.width, self.height)
+        self.close_button_rect = pygame.Rect(self.x + self.width - 30, self.y + 10, 20, 20)
+        
+        # Кнопки
+        self.yes_button = pygame.Rect(self.x + 50, self.y + 180, 120, 40)
+        self.no_button = pygame.Rect(self.x + 230, self.y + 180, 120, 40)
+        
+        # Цвета
+        self.bg_color = (40, 44, 52)
+        self.border_color = (60, 64, 72)
+        self.text_color = (220, 240, 255)
+        self.warning_color = (255, 100, 100)
+        self.button_color = (60, 70, 100)
+        self.button_hover = (100, 120, 180)
+        
+        # Шрифты
+        self.title_font = pygame.font.Font(None, 36)
+        self.warning_font = pygame.font.Font(None, 28)
+        self.button_font = pygame.font.Font(None, 32)
+
+    def draw(self, screen):
+        if not self.visible:
+            return
+            
+        # Затемнение фона
+        overlay = pygame.Surface((1920, 1080), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 128))
+        screen.blit(overlay, (0, 0))
+        
+        # Окно
+        pygame.draw.rect(screen, self.bg_color, self.rect, border_radius=10)
+        pygame.draw.rect(screen, self.border_color, self.rect, 2, border_radius=10)
+        
+        # Крестик
+        pygame.draw.rect(screen, self.border_color, self.close_button_rect, border_radius=5)
+        pygame.draw.line(screen, self.text_color, 
+                        (self.close_button_rect.x + 5, self.close_button_rect.y + 5),
+                        (self.close_button_rect.right - 5, self.close_button_rect.bottom - 5), 2)
+        pygame.draw.line(screen, self.text_color,
+                        (self.close_button_rect.right - 5, self.close_button_rect.y + 5),
+                        (self.close_button_rect.x + 5, self.close_button_rect.bottom - 5), 2)
+        
+        # Текст
+        title = self.title_font.render("ARE YOU SURE YOU WANT TO EXIT?", True, self.text_color)
+        warning = self.warning_font.render("Game will NOT be saved!", True, self.warning_color)
+        
+        screen.blit(title, (self.x + (self.width - title.get_width()) // 2, self.y + 50))
+        screen.blit(warning, (self.x + (self.width - warning.get_width()) // 2, self.y + 100))
+        
+        # Кнопки
+        mouse_pos = pygame.mouse.get_pos()
+        
+        # Кнопка "Да"
+        yes_color = self.button_hover if self.yes_button.collidepoint(mouse_pos) else self.button_color
+        pygame.draw.rect(screen, yes_color, self.yes_button, border_radius=8)
+        yes_text = self.button_font.render("Yes", True, self.text_color)
+        screen.blit(yes_text, (self.yes_button.centerx - yes_text.get_width() // 2,
+                             self.yes_button.centery - yes_text.get_height() // 2))
+        
+        # Кнопка "Нет"
+        no_color = self.button_hover if self.no_button.collidepoint(mouse_pos) else self.button_color
+        pygame.draw.rect(screen, no_color, self.no_button, border_radius=8)
+        no_text = self.button_font.render("No", True, self.text_color)
+        screen.blit(no_text, (self.no_button.centerx - no_text.get_width() // 2,
+                            self.no_button.centery - no_text.get_height() // 2))
+
+    def handle_event(self, event):
+        if not self.visible:
+            return False
+            
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self.close_button_rect.collidepoint(event.pos):
+                self.visible = False
+                return False
+            elif self.yes_button.collidepoint(event.pos):
+                return True
+            elif self.no_button.collidepoint(event.pos):
+                self.visible = False
+                return False
+        return False
+
+# Создаем экземпляр окна подтверждения
+exit_confirmation = ExitConfirmation()
+
 # Главный игровой цикл
 running = True
 while running:
@@ -168,7 +260,18 @@ while running:
         if event.type == pygame.QUIT:
             running = False
         
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                exit_confirmation.visible = not exit_confirmation.visible
+                if exit_confirmation.handle_event(event):
+                    running = False
+        
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if exit_confirmation.visible:
+                if exit_confirmation.handle_event(event):
+                    running = False
+                continue
+                
             if event.button == 1:
                 if stats_button_rect.collidepoint(mouse_pos):
                     show_stats = not show_stats
@@ -526,6 +629,9 @@ while running:
         screen.blit(notif_surf, (510, notif_y))
         notif_y += 80
 
+    # Отрисовка окна подтверждения выхода
+    exit_confirmation.draw(screen)
+    
     pygame.display.flip()
     clock.tick(60)
 
