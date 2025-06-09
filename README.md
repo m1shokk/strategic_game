@@ -97,7 +97,7 @@
 ### Map
 ![Map](screenshots/map_example.png)
 
-### Battle (2v2)
+### Battle (1v1)
 ![image](https://github.com/user-attachments/assets/ab0e748a-cfff-4430-9e7f-220f8f5d542a)
 
 
